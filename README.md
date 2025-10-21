@@ -42,55 +42,55 @@ The system uses a polyglot microservices approach, leveraging the strengths of d
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                         EXTERNAL LAYER                               │
+│                         EXTERNAL LAYER                              │
 ├─────────────────────────────────────────────────────────────────────┤
-│  Clients (Web, Mobile)                                               │
+│  Clients (Web, Mobile)                                              │
 │  ↓ REST/GraphQL + WebSocket                                         │
-│                                                                       │
-│  API Gateway (Port 3000)                                             │
-│  - Authentication & Authorization                                    │
-│  - Rate Limiting                                                     │
-│  - Request Routing                                                   │
+│                                                                     │
+│  API Gateway (Port 3000)                                            │
+│  - Authentication & Authorization                                   │
+│  - Rate Limiting                                                    │
+│  - Request Routing                                                  │
 │  - REST → gRPC Translation                                          │
 └────────────────────┬────────────────────────────────────────────────┘
                      │ gRPC
 ┌────────────────────▼────────────────────────────────────────────────┐
-│                    MICROSERVICES LAYER (gRPC)                        │
+│                    MICROSERVICES LAYER (gRPC)                       │
 ├─────────────────────────────────────────────────────────────────────┤
-│                                                                       │
-│  ┌─────────────┐  ┌─────────────┐  ┌──────────────┐                │
-│  │   User      │  │   Event     │  │  Inventory   │                │
-│  │  Service    │  │  Service    │  │   Service    │                │
-│  │  :50051     │  │  :50053     │  │   :50054     │                │
-│  │  (NestJS)   │  │  (NestJS)   │  │    (Go)      │                │
-│  └──────┬──────┘  └──────┬──────┘  └──────┬───────┘                │
-│         │                │                │                          │
-│  ┌──────▼──────┐  ┌──────▼──────┐  ┌──────▼───────┐                │
-│  │   Order     │  │  Payment    │  │  Waitroom    │                │
-│  │  Service    │  │  Service    │  │   Service    │                │
-│  │  :50055     │  │  :50052     │  │   :50056     │                │
-│  │   (Go)      │  │  (NestJS)   │  │    (Go)      │                │
-│  └──────┬──────┘  └──────┬──────┘  └──────┬───────┘                │
-│         │                │                │                          │
-└─────────┼────────────────┼────────────────┼──────────────────────────┘
+│                                                                     │
+│  ┌─────────────┐  ┌─────────────┐  ┌──────────────┐                 │
+│  │   User      │  │   Event     │  │  Inventory   │                 │
+│  │  Service    │  │  Service    │  │   Service    │                 │
+│  │  :50051     │  │  :50053     │  │   :50054     │                 │
+│  │  (NestJS)   │  │  (NestJS)   │  │    (Go)      │                 │
+│  └──────┬──────┘  └──────┬──────┘  └──────┬───────┘                 │
+│         │                │                │                         │
+│  ┌──────▼──────┐  ┌──────▼──────┐  ┌──────▼───────┐                 │
+│  │   Order     │  │  Payment    │  │  Waitroom    │                 │
+│  │  Service    │  │  Service    │  │   Service    │                 │
+│  │  :50055     │  │  :50052     │  │   :50056     │                 │
+│  │   (Go)      │  │  (NestJS)   │  │    (Go)      │                 │
+│  └──────┬──────┘  └──────┬──────┘  └──────┬───────┘                 │
+│         │                │                │                         │
+└─────────┼────────────────┼────────────────┼─────────────────────────┘
           │                │                │
-┌─────────▼────────────────▼────────────────▼──────────────────────────┐
-│                    EVENT STREAMING LAYER (Kafka)                      │
-├───────────────────────────────────────────────────────────────────────┤
-│  Topics:                                                               │
-│  - QUEUE_JOINED, QUEUE_READY, QUEUE_LEFT                             │
-│  - CHECKOUT_COMPLETED, CHECKOUT_FAILED, CHECKOUT_EXPIRED             │
-│  - PAYMENT_COMPLETED, PAYMENT_FAILED                                 │
-│  - ORDER_CREATED, ORDER_COMPLETED, ORDER_CANCELLED                   │
-└───────────────────────────────────────────────────────────────────────┘
+┌─────────▼────────────────▼────────────────▼─────────────────────────┐
+│                    EVENT STREAMING LAYER (Kafka)                    │
+├─────────────────────────────────────────────────────────────────────┤
+│  Topics:                                                            │
+│  - QUEUE_JOINED, QUEUE_READY, QUEUE_LEFT                            │
+│  - CHECKOUT_COMPLETED, CHECKOUT_FAILED, CHECKOUT_EXPIRED            │
+│  - PAYMENT_COMPLETED, PAYMENT_FAILED                                │
+│  - ORDER_CREATED, ORDER_COMPLETED, ORDER_CANCELLED                  │
+└─────────────────────────────────────────────────────────────────────┘
           │
-┌─────────▼─────────────────────────────────────────────────────────────┐
-│                        DATA PERSISTENCE LAYER                          │
-├────────────────────────────────────────────────────────────────────────┤
-│  PostgreSQL (User, Event, Inventory, Payment)                         │
-│  MongoDB (Orders)                                                      │
-│  Redis (Waitroom Sessions, Queue Management, Caching)                 │
-└────────────────────────────────────────────────────────────────────────┘
+┌─────────▼───────────────────────────────────────────────────────────┐
+│                        DATA PERSISTENCE LAYER                       │
+├─────────────────────────────────────────────────────────────────────┤
+│  PostgreSQL (User, Event, Inventory, Payment)                       │
+│  MongoDB (Orders)                                                   │
+│  Redis (Waitroom Sessions, Queue Management, Caching)               │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -445,7 +445,7 @@ Background job running every 1 second:
 ┌─────────────────────────────────────────────────────────────────┐
 │ 2. QUEUE PROCESSOR (Background Job - Every 1s)                  │
 ├─────────────────────────────────────────────────────────────────┤
-│ Waitroom Service                                                 │
+│ Waitroom Service                                                │
 │   ├─ Check available checkout slots (100 - processing count)    │
 │   ├─ Pop users from queue (batch of 10)                         │
 │   ├─ Generate JWT checkout token (15-min expiry)                │
@@ -459,12 +459,12 @@ Background job running every 1 second:
 ├─────────────────────────────────────────────────────────────────┤
 │ User → API Gateway → Waitroom Service                           │
 │   └─ Return: status="admitted", checkout_token, checkout_url    │
-│                                                                  │
+│                                                                 │
 │ User → Navigate to checkout page with token                     │
 └─────────────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────────────┐
-│ 4. CREATE ORDER                                                  │
+│ 4. CREATE ORDER                                                 │
 ├─────────────────────────────────────────────────────────────────┤
 │ User → API Gateway → Order Service                              │
 │   ├─ Validate event (Event Service gRPC)                        │
@@ -477,23 +477,23 @@ Background job running every 1 second:
 │   │   └─ Status: PENDING                                        │
 │   └─ Create payment intent (Payment Service gRPC)               │
 │       └─ Return payment URL                                     │
-│                                                                  │
+│                                                                 │
 │ Response → User receives payment redirect URL                   │
 └─────────────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────────────┐
-│ 5. PAYMENT PROCESSING                                            │
+│ 5. PAYMENT PROCESSING                                           │
 ├─────────────────────────────────────────────────────────────────┤
 │ User → Payment Provider (ZaloPay/PayOS/VNPay)                   │
 │   └─ Complete payment on provider site                          │
-│                                                                  │
+│                                                                 │
 │ Payment Provider → Webhook → Payment Service                    │
 │   ├─ Atomic Transaction:                                        │
 │   │   ├─ Update payment status → COMPLETED                      │
-│   │   └─ Save event to Outbox table                            │
+│   │   └─ Save event to Outbox table                             │
 │   └─ Return 200 OK to provider                                  │
-│                                                                  │
-│ Background Worker (Every 5s):                                    │
+│                                                                 │
+│ Background Worker (Every 5s):                                   │
 │   ├─ Fetch unpublished events from Outbox                       │
 │   ├─ Publish PAYMENT_COMPLETED event → Kafka                    │
 │   └─ Mark event as published                                    │

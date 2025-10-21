@@ -1,0 +1,32 @@
+[submodule "ticketbottle-order"]
+	path = ticketbottle-order
+	url = https://github.com/vogiaan1904/ticketbottle-order.git
+	branch = main
+[submodule "ticketbottle-payment"]
+	path = ticketbottle-payment
+	url = https://github.com/vogiaan1904/ticketbottle-payment.git
+	branch = main
+[submodule "ticketbottle-event"]
+	path = ticketbottle-event
+	url = https://github.com/vogiaan1904/ticketbottle-event.git
+	branch = main
+[submodule "ticketbottle-inventory"]
+	path = ticketbottle-inventory
+	url = https://github.com/vogiaan1904/ticketbottle-inventory.git
+	branch = main
+[submodule "ticketbottle-waitroom"]
+	path = ticketbottle-waitroom
+	url = https://github.com/vogiaan1904/ticketbottle-waitroom.git
+	branch = main
+[submodule "ticketbottle-proto"]
+	path = ticketbottle-proto
+	url = https://github.com/vogiaan1904/ticketbottle-proto.git
+	branch = main
+[submodule "ticketbottle-user"]
+	path = ticketbottle-user
+	url = https://github.com/vogiaan1904/ticketbottle-user.git
+	branch = main
+[submodule "ticketbottle-api-gateway"]
+	path = ticketbottle-api-gateway
+	url = https://github.com/vogiaan1904/ticketbottle-api-gateway.git
+	branch = main

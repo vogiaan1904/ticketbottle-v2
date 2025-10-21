@@ -22,7 +22,7 @@
 
 ---
 
-## 🌟 Overview
+## Overview
 
 TicketBottle V2 is a production-ready, distributed ticket selling platform built with microservices architecture. The system is designed to handle high-demand ticket sales scenarios (concerts, sports events, conferences) with features like:
 
@@ -38,7 +38,7 @@ The system uses a polyglot microservices approach, leveraging the strengths of d
 
 ---
 
-## 🏗️ System Architecture
+## System Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐

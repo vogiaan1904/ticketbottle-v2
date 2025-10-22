@@ -1,0 +1,279 @@
+# docker-compose.yml
+version: '3.8'
+
+networks:
+  ticketbottle-network:
+    driver: bridge
+
+volumes:
+  postgres_inventory_data:
+  postgres_event_data:
+  postgres_payment_data:
+  mongo_order_data:
+  redis_waitroom_data:
+
+services:
+  # ============================================
+  # INFRASTRUCTURE SERVICES
+  # ============================================
+  
+  # Redis (Waitroom)
+  redis:
+    image: redis:7-alpine
+    container_name: ticketbottle-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_waitroom_data:/data
+    networks:
+      - ticketbottle-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  # PostgreSQL - Inventory
+  postgres-inventory:
+    image: postgres:15-alpine
+    container_name: ticketbottle-postgres-inventory
+    environment:
+      POSTGRES_DB: ticketbottle_inventory
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: root
+    ports:
+      - "5435:5432"
+    volumes:
+      - postgres_inventory_data:/var/lib/postgresql/data
+    networks:
+      - ticketbottle-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U root -d ticketbottle_inventory"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # PostgreSQL - Event
+  postgres-event:
+    image: postgres:15-alpine
+    container_name: ticketbottle-postgres-event
+    environment:
+      POSTGRES_DB: ticketbottle_event
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: root
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_event_data:/var/lib/postgresql/data
+    networks:
+      - ticketbottle-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U root -d ticketbottle_event"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # PostgreSQL - Payment
+  postgres-payment:
+    image: postgres:15-alpine
+    container_name: ticketbottle-postgres-payment
+    environment:
+      POSTGRES_DB: ticketbottle_payment
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: root
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_payment_data:/var/lib/postgresql/data
+    networks:
+      - ticketbottle-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U root -d ticketbottle_payment"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # MongoDB - Order
+  mongo-order:
+    image: mongo:8
+    container_name: ticketbottle-mongo-order
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: root
+      MONGO_INITDB_DATABASE: ticketbottle_order
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_order_data:/data/db
+    networks:
+      - ticketbottle-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Zookeeper (Kafka dependency)
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: ticketbottle-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - ticketbottle-network
+    restart: unless-stopped
+
+  # Kafka
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: ticketbottle-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+    networks:
+      - ticketbottle-network
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+
+  # Kafka UI (Optional - for debugging)
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: ticketbottle-kafka-ui
+    depends_on:
+      - kafka
+    ports:
+      - "8090:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: ticketbottle
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+    networks:
+      - ticketbottle-network
+    restart: unless-stopped
+
+  # ============================================
+  # APPLICATION SERVICES
+  # ============================================
+
+  # Event Service
+  event-service:
+    image: vogiaan19042004/ticketbottle-event:latest
+    container_name: ticketbottle-event-service
+    depends_on:
+      postgres-event:
+        condition: service_healthy
+    ports:
+      - "50053:50053"  # gRPC port
+    env_file:
+      - ./envs/event.env
+
+    networks:
+      - ticketbottle-network
+    restart: unless-stopped
+
+  # Inventory Service
+  inventory-service:
+    image: vogiaan19042004/ticketbottle-inventory:latest
+    container_name: ticketbottle-inventory-service
+    depends_on:
+      postgres-inventory:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "50057:50057"  # gRPC port
+    env_file:
+      - ./envs/inventory.env
+    networks:
+      - ticketbottle-network
+    restart: unless-stopped
+
+  # Waitroom Service
+  waitroom-service:
+    image: vogiaan19042004/ticketbottle-waitroom:latest
+    container_name: ticketbottle-waitroom-service
+    depends_on:
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "50056:50056"   # HTTP port
+    env_file:
+      - ./envs/waitroom.env
+    networks:
+      - ticketbottle-network
+    restart: unless-stopped
+
+  # Payment Service
+  payment-service:
+    image: vogiaan19042004/ticketbottle-payment:latest
+    container_name: ticketbottle-payment-service
+    depends_on:
+      postgres-payment:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8085:8085"   # HTTP port
+      - "50055:50055" # gRPC port
+    env_file:
+      - ./envs/payment.env
+    networks:
+      - ticketbottle-network
+    restart: unless-stopped
+
+  # Order Service
+  order-service:
+    image: vogiaan19042004/ticketbottle-order-api:latest
+    container_name: ticketbottle-order-service
+    depends_on:
+      mongo-order:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      event-service:
+        condition: service_started
+      inventory-service:
+        condition: service_started
+      payment-service:
+        condition: service_started
+    ports:
+      - "50054:50054"  # gRPC port
+    env_file:
+      - ./envs/order.env
+    networks:
+      - ticketbottle-network
+    restart: unless-stopped
+
+  # Order Consumer Service (if separate)
+  order-consumer:
+    image: vogiaan19042004/ticketbottle-order-consumer:latest
+    container_name: ticketbottle-order-consumer
+    depends_on:
+      - kafka
+      - order-service
+    env_file:
+      - ./envs/order.env
+    networks:
+      - ticketbottle-network
+    restart: unless-stopped

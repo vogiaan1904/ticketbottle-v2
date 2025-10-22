@@ -1,5 +1,9 @@
 # TicketBottle V2 - Distributed Ticket Selling Platform
 
+<p align="center">
+  <strong>A high-performance, scalable microservices-based ticket selling system designed to handle high-traffic ticket sales with virtual queuing, real-time inventory management, and reliable payment processing.</strong>
+</p>
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Go](https://img.shields.io/badge/Go-00ADD8?logo=go&logoColor=white)](https://golang.org/)
 [![NestJS](https://img.shields.io/badge/NestJS-E0234E?logo=nestjs&logoColor=white)](https://nestjs.com/)
@@ -9,10 +13,6 @@
 [![Redis](https://img.shields.io/badge/Redis-DC382D?logo=redis&logoColor=white)](https://redis.io/)
 [![Kafka](https://img.shields.io/badge/Kafka-231F20?logo=apachekafka&logoColor=white)](https://kafka.apache.org/)
 [![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
-
-<p align="center">
-  <strong>A high-performance, scalable microservices-based ticket selling system designed to handle high-traffic ticket sales with virtual queuing, real-time inventory management, and reliable payment processing.</strong>
-</p>
 
 ---
 
@@ -43,6 +43,7 @@ TicketBottle V2 is a production-ready, distributed ticket selling platform built
 - **High Availability** - Distributed services with horizontal scaling capability
 
 The system uses a polyglot microservices approach, leveraging the strengths of different technologies:
+
 - **Go** for high-performance, concurrent services (Inventory, Order, Waitroom)
 - **TypeScript/NestJS** for feature-rich business logic services (API Gateway, User, Event, Payment)
 
@@ -50,69 +51,20 @@ The system uses a polyglot microservices approach, leveraging the strengths of d
 
 ## System Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                         EXTERNAL LAYER                              │
-├─────────────────────────────────────────────────────────────────────┤
-│  Clients (Web, Mobile)                                              │
-│  ↓ REST/GraphQL + WebSocket                                         │
-│                                                                     │
-│  API Gateway (Port 3000)                                            │
-│  - Authentication & Authorization                                   │
-│  - Rate Limiting                                                    │
-│  - Request Routing                                                  │
-│  - REST → gRPC Translation                                          │
-└────────────────────┬────────────────────────────────────────────────┘
-                     │ gRPC
-┌────────────────────▼────────────────────────────────────────────────┐
-│                    MICROSERVICES LAYER (gRPC)                       │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│  ┌─────────────┐  ┌─────────────┐  ┌──────────────┐                 │
-│  │   User      │  │   Event     │  │  Inventory   │                 │
-│  │  Service    │  │  Service    │  │   Service    │                 │
-│  │  :50051     │  │  :50053     │  │   :50054     │                 │
-│  │  (NestJS)   │  │  (NestJS)   │  │    (Go)      │                 │
-│  └──────┬──────┘  └──────┬──────┘  └──────┬───────┘                 │
-│         │                │                │                         │
-│  ┌──────▼──────┐  ┌──────▼──────┐  ┌──────▼───────┐                 │
-│  │   Order     │  │  Payment    │  │  Waitroom    │                 │
-│  │  Service    │  │  Service    │  │   Service    │                 │
-│  │  :50055     │  │  :50052     │  │   :50056     │                 │
-│  │   (Go)      │  │  (NestJS)   │  │    (Go)      │                 │
-│  └──────┬──────┘  └──────┬──────┘  └──────┬───────┘                 │
-│         │                │                │                         │
-└─────────┼────────────────┼────────────────┼─────────────────────────┘
-          │                │                │
-┌─────────▼────────────────▼────────────────▼─────────────────────────┐
-│                    EVENT STREAMING LAYER (Kafka)                    │
-├─────────────────────────────────────────────────────────────────────┤
-│  Topics:                                                            │
-│  - QUEUE_JOINED, QUEUE_READY, QUEUE_LEFT                            │
-│  - CHECKOUT_COMPLETED, CHECKOUT_FAILED, CHECKOUT_EXPIRED            │
-│  - PAYMENT_COMPLETED, PAYMENT_FAILED                                │
-│  - ORDER_CREATED, ORDER_COMPLETED, ORDER_CANCELLED                  │
-└─────────────────────────────────────────────────────────────────────┘
-          │
-┌─────────▼───────────────────────────────────────────────────────────┐
-│                        DATA PERSISTENCE LAYER                       │
-├─────────────────────────────────────────────────────────────────────┤
-│  PostgreSQL (User, Event, Inventory, Payment)                       │
-│  MongoDB (Orders)                                                   │
-│  Redis (Waitroom Sessions, Queue Management, Caching)               │
-└─────────────────────────────────────────────────────────────────────┘
-```
+![system architecture](/images/architecture.png)
 
 ---
 
 ## Services
 
 ### 1. **API Gateway** (TypeScript/NestJS)
+
 **Port:** 3000 | **Protocol:** HTTP/REST
 
 The unified entry point for all client requests.
 
 **Responsibilities:**
+
 - REST API exposure to web and mobile clients
 - JWT authentication and authorization
 - Request validation and transformation
@@ -122,6 +74,7 @@ The unified entry point for all client requests.
 - CORS management
 
 **Key Dependencies:**
+
 - `@nestjs/microservices` - gRPC client
 - `@nestjs/jwt` - JWT authentication
 - `@nestjs/swagger` - API documentation
@@ -131,20 +84,24 @@ The unified entry point for all client requests.
 ---
 
 ### 2. **User Service** (TypeScript/NestJS)
+
 **Port:** 50051 | **Protocol:** gRPC | **Database:** PostgreSQL
 
 Handles user management and authentication.
 
 **Responsibilities:**
+
 - User registration and profile management
 - User authentication (via API Gateway)
 - User data persistence
 - Email verification management
 
 **Database Schema:**
+
 - User table with fields: id, firstName, lastName, email, password (hashed), avatar, emailVerified, createdAt, updatedAt
 
 **gRPC Methods:**
+
 - `Create` - Register new user
 - `Update` - Update user profile
 - `FindOne` - Get user by ID or email
@@ -154,11 +111,13 @@ Handles user management and authentication.
 ---
 
 ### 3. **Event Service** (TypeScript/NestJS)
+
 **Port:** 50053 | **Protocol:** gRPC | **Database:** PostgreSQL
 
 Manages events, organizers, and event configurations.
 
 **Responsibilities:**
+
 - Event creation and management
 - Event configuration (ticket sales, waitroom settings)
 - Event categorization and search
@@ -166,51 +125,51 @@ Manages events, organizers, and event configurations.
 - Event status workflow (draft → configured → approved → published)
 - Organizer management
 
-**Database Schema:**
-- Event table with fields: id, name, description, startDate, endDate, thumbnailUrl, status, location, organizer, config, categories, roles, createdAt, updatedAt
-- EventConfig table with fields: id, eventId, ticketSaleStartDate, ticketSaleEndDate, isFree, maxAttendees, isPublic, requiresApproval, allowWaitRoom, isNewTrending
-
 **Event Status Flow:**
+
 - DRAFT → CONFIGURED → APPROVED → PUBLISHED
 - Any status can transition to CANCELLED
 
 ---
 
 ### 4. **Inventory Service** (Go/GORM)
+
 **Port:** 50054 | **Protocol:** gRPC | **Database:** PostgreSQL
 
 High-performance ticket inventory management with atomic operations.
 
 **Responsibilities:**
+
 - Ticket class creation and management
 - Real-time availability checking
 - Atomic ticket reservation (reserve/confirm/release)
 - Ticket inventory tracking (total, reserved, sold)
 - Expiration handling for stale reservations
 
-**Database Schema:**
-- TicketClass table: ID, EventID, Name, PriceCents, Currency, Total, Reserved, Sold, SaleStartAt, SaleEndAt, Status, CreatedAt, UpdatedAt
-- Reservation table: ID, OrderID, TicketClassID, Qty, ExpiresAt, Status (ACTIVE, CONFIRMED, EXPIRED, CANCELLED), CreatedAt, UpdatedAt
-
 **Availability Formula:**
+
 - available = total - reserved - sold
 
 **Key Operations:**
+
 - `Reserve` - Atomically reserve tickets for an order (15-minute hold)
 - `Confirm` - Convert reservation to sale (payment completed)
 - `Release` - Free reserved tickets (payment failed/expired)
 
 **Background Job:**
+
 - Periodic cleanup of expired reservations (every 1 minute)
 
 ---
 
 ### 5. **Order Service** (Go/MongoDB)
+
 **Port:** 50055 | **Protocol:** gRPC | **Database:** MongoDB
 
 **Saga Orchestrator** - Coordinates distributed transactions across multiple services.
 
 **Responsibilities:**
+
 - Order creation with multi-step coordination
 - Saga orchestration for distributed transactions
 - Compensation/rollback on transaction failures
@@ -219,39 +178,39 @@ High-performance ticket inventory management with atomic operations.
 - Inventory reservation coordination
 - Order history and queries
 
-**Database Schema:**
-- Order collection: ID, Code, EventID, UserID, UserFullname, UserEmail, UserPhone, TotalAmountCents, Currency, Status (PENDING, COMPLETED, CANCELED, FAILED), PaymentMethod, Items, CreatedAt, UpdatedAt
-- OrderItem: TicketClassID, Quantity, PriceCents
-
 **Saga Pattern Implementation:**
 
 The Order Service implements the **Saga Orchestration Pattern** to manage distributed transactions across Event, Inventory, and Payment services. Each order creation is a saga with multiple steps:
 
 **Saga Steps (Forward Flow):**
+
 1. **Validate Event** - Verify event exists and is published (Event Service gRPC)
 2. **Validate Event Config** - Check event configuration (Event Service gRPC)
 3. **Validate Checkout Token** - If waitroom enabled, verify JWT token
 4. **Get Ticket Classes** - Fetch ticket information (Inventory Service gRPC)
 5. **Check Availability** - Verify sufficient ticket inventory (Inventory Service gRPC)
-6. **Reserve Tickets** - Atomically reserve tickets with 15-min hold (Inventory Service gRPC) ✓ *Saga tracking begins*
-7. **Create Order** - Persist order record (MongoDB) ✓ *Saga tracked*
-8. **Create Order Items** - Persist order line items (MongoDB) ✓ *Saga tracked*
+6. **Reserve Tickets** - Atomically reserve tickets with 15-min hold (Inventory Service gRPC) ✓ _Saga tracking begins_
+7. **Create Order** - Persist order record (MongoDB) ✓ _Saga tracked_
+8. **Create Order Items** - Persist order line items (MongoDB) ✓ _Saga tracked_
 9. **Create Payment Intent** - Generate payment URL (Payment Service gRPC)
 10. **Return Payment URL** - Complete order creation
 
 **Compensation/Rollback (Reverse Flow):**
 If any step fails after saga tracking begins, the service automatically compensates:
+
 - **Release Tickets** - Cancel inventory reservation (Inventory Service gRPC)
 - **Delete Order Items** - Remove order line items (MongoDB)
 - **Delete Order** - Remove order record (MongoDB)
 
 **Asynchronous Saga Continuation (via Kafka):**
+
 - **Payment Completed Event** → Confirm inventory reservation → Update order status to COMPLETED → Publish CHECKOUT_COMPLETED
 - **Payment Failed Event** → Release inventory reservation → Update order status to FAILED → Publish CHECKOUT_FAILED
 - **Payment Expired Event** → Release inventory reservation → Update order status to CANCELLED
 
 **Saga State Tracking:**
 The service maintains a `SagaCompensation` structure to track completed steps:
+
 - `CreatedOrder` - Order record created
 - `ItemsCreated` - Order items created
 - `TicketsReserved` - Inventory reservation made
@@ -261,11 +220,13 @@ This ensures accurate rollback in case of failures at any point in the transacti
 ---
 
 ### 6. **Payment Service** (TypeScript/NestJS)
+
 **Port:** 50052 | **Protocol:** gRPC | **Database:** PostgreSQL
 
 Multi-provider payment processing with outbox pattern for reliability.
 
 **Responsibilities:**
+
 - Payment intent creation
 - Payment confirmation and cancellation
 - Multi-provider support (ZaloPay, PayOS, VNPay)
@@ -273,14 +234,11 @@ Multi-provider payment processing with outbox pattern for reliability.
 - Webhook handling
 - Event publishing via Outbox pattern
 
-**Database Schema:**
-- Payment table: id, orderCode, amountCents, currency, provider (ZALOPAY, PAYOS, VNPAY), status (PENDING, COMPLETED, FAILED, CANCELED), providerResponse, transactionId, createdAt, updatedAt
-- Outbox table: id, aggregateId, aggregateType, eventType, payload, published, publishedAt, createdAt, retryCount, lastError
-
 **Outbox Pattern:**
 Ensures exactly-once event delivery by atomically saving payment updates and events in the same database transaction. Payment updates and outbox entries are saved in a single atomic transaction, then a background worker publishes events from the outbox to Kafka.
 
 **Payment Flow:**
+
 1. Create payment intent → Get payment URL
 2. User completes payment on provider site
 3. Provider sends webhook → Update payment status
@@ -291,11 +249,13 @@ Ensures exactly-once event delivery by atomically saving payment updates and eve
 ---
 
 ### 7. **Waitroom Service** (Go/Redis/Kafka)
+
 **Port:** 50056 | **Protocol:** gRPC | **Database:** Redis
 
 Virtual queue management for high-traffic ticket sales.
 
 **Responsibilities:**
+
 - Queue session management
 - Fair queue processing (FIFO)
 - Checkout token generation (JWT)
@@ -306,21 +266,25 @@ Virtual queue management for high-traffic ticket sales.
 **Redis Data Structures:**
 
 **Sessions (Hash):**
+
 - Key: `waitroom:session:{session_id}`
 - Value: JSON with id, user_id, event_id, status (queued → admitted → completed), position, checkout_token (JWT), queued_at, expires_at, admitted_at, checkout_expires_at
 
 **Queue (Sorted Set):**
+
 - Key: `waitroom:{event_id}:queue`
 - Score: Unix timestamp (FIFO ordering)
 - Members: session_ids
 
 **Processing Set (Set):**
+
 - Key: `waitroom:{event_id}:processing`
 - Members: session_ids of users currently in checkout
 - Max 100 concurrent (configurable)
 
 **Queue Processor:**
 Background job running every 1 second:
+
 1. Check processing count (how many users in checkout)
 2. Calculate available slots (max 100 - current processing)
 3. Pop users from front of queue
@@ -330,18 +294,21 @@ Background job running every 1 second:
 7. Publish QUEUE_READY event to Kafka
 
 **Session States:**
+
 - QUEUED → ADMITTED → COMPLETED
 - QUEUED → EXPIRED
 
 **Kafka Events:**
-- `QUEUE_JOINED` - User joins queue
-- `QUEUE_LEFT` - User leaves queue
-- `QUEUE_READY` - User admitted to checkout (consumed by Order service)
+
+- `queue.joined` - User joins queue
+- `queue.left` - User leaves queue
+- `queue.ready` - User admitted to checkout (consumed by Order service)
 
 **Kafka Event Consumers:**
-- `CHECKOUT_COMPLETED` - Remove from processing, free slot
-- `CHECKOUT_FAILED` - Remove from processing, free slot
-- `CHECKOUT_EXPIRED` - Remove from processing, free slot
+
+- `checkout.completed` - Remove from processing, free slot
+- `checkout.failed` - Remove from processing, free slot
+- `checkout.expired` - Remove from processing, free slot
 
 ---
 
@@ -349,15 +316,15 @@ Background job running every 1 second:
 
 ### Languages & Frameworks
 
-| Service | Language | Framework | Key Libraries |
-|---------|----------|-----------|---------------|
-| API Gateway | TypeScript | NestJS | `@nestjs/microservices`, `@nestjs/jwt` |
-| User Service | TypeScript | NestJS | Prisma, bcryptjs |
-| Event Service | TypeScript | NestJS | Prisma, `@nestjs/cqrs` |
-| Payment Service | TypeScript | NestJS | Prisma, KafkaJS, `@nestjs/schedule` |
-| Inventory Service | Go 1.25 | - | GORM, gRPC |
-| Order Service | Go 1.25 | Gin | MongoDB Driver, Sarama (Kafka) |
-| Waitroom Service | Go 1.25 | - | Redis, Sarama (Kafka), JWT |
+| Service           | Language   | Framework | Key Libraries                          |
+| ----------------- | ---------- | --------- | -------------------------------------- |
+| API Gateway       | TypeScript | NestJS    | `@nestjs/microservices`, `@nestjs/jwt` |
+| User Service      | TypeScript | NestJS    | Prisma, bcryptjs                       |
+| Event Service     | TypeScript | NestJS    | Prisma, `@nestjs/cqrs`                 |
+| Payment Service   | TypeScript | NestJS    | Prisma, KafkaJS, `@nestjs/schedule`    |
+| Inventory Service | Go 1.25    | -         | GORM, gRPC                             |
+| Order Service     | Go 1.25    | -         | MongoDB Driver, Sarama (Kafka)         |
+| Waitroom Service  | Go 1.25    | -         | Redis, Sarama (Kafka), JWT             |
 
 ### Databases & Storage
 
@@ -385,6 +352,7 @@ Background job running every 1 second:
 ## ✨ Key Features
 
 ### 1. **Virtual Waiting Room**
+
 - Fair FIFO queue management for high-traffic sales
 - Automatic admission when checkout slots available
 - Real-time position updates
@@ -393,6 +361,7 @@ Background job running every 1 second:
 - Session TTL and automatic cleanup
 
 ### 2. **Atomic Inventory Management**
+
 - Pessimistic locking for ticket reservations
 - Three-step reservation flow: Reserve → Confirm/Release
 - Automatic cleanup of expired reservations
@@ -400,6 +369,7 @@ Background job running every 1 second:
 - Support for multiple ticket classes per event
 
 ### 3. **Multi-Provider Payment Processing**
+
 - Support for ZaloPay, PayOS, VNPay
 - Webhook handling for payment confirmation
 - Outbox pattern for reliable event delivery
@@ -407,6 +377,7 @@ Background job running every 1 second:
 - Idempotent payment operations
 
 ### 4. **Distributed Transaction Management (Saga Pattern)**
+
 - Saga orchestration for multi-service transactions
 - Automatic compensation/rollback on failures
 - State tracking for transaction progress
@@ -414,6 +385,7 @@ Background job running every 1 second:
 - Mixed synchronous (gRPC) and asynchronous (Kafka) coordination
 
 ### 5. **Event-Driven Architecture**
+
 - Asynchronous event processing with Kafka
 - Reliable event delivery with Outbox pattern
 - Event replay capability
@@ -421,6 +393,7 @@ Background job running every 1 second:
 - Horizontal scalability
 
 ### 6. **High Availability**
+
 - Stateless service design
 - Database connection pooling
 - Graceful shutdown handling
@@ -428,6 +401,7 @@ Background job running every 1 second:
 - Circuit breaker patterns (future)
 
 ### 7. **Security**
+
 - JWT-based authentication
 - Role-based access control (Event roles)
 - Rate limiting on API Gateway
@@ -532,18 +506,21 @@ Background job running every 1 second:
 ### Error Scenarios
 
 **Payment Failure:**
+
 - Payment Failed → PAYMENT_FAILED event
 - Order Service: Release inventory reservation
 - Order Service: Update order status → FAILED
 - Waitroom Service: Free checkout slot
 
 **Payment Timeout (15 minutes):**
+
 - Payment Expired → PAYMENT_EXPIRED event
 - Order Service: Release inventory reservation
 - Order Service: Update order status → CANCELLED
 - Waitroom Service: Free checkout slot
 
 **Insufficient Inventory:**
+
 - Order Creation → Check availability → Insufficient stock
 - Return error to user (before reservation)
 
@@ -554,6 +531,7 @@ Background job running every 1 second:
 ### 1. **Synchronous (gRPC)**
 
 Used for request-response operations requiring immediate feedback:
+
 - API Gateway → User Service (Get user details)
 - API Gateway → Event Service (Get event info)
 - Order Service → Inventory (Reserve tickets)
@@ -561,6 +539,7 @@ Used for request-response operations requiring immediate feedback:
 - Waitroom → Event Service (Get active events)
 
 **Benefits:**
+
 - Type safety with Protocol Buffers
 - Bi-directional streaming support
 - Better performance than REST
@@ -569,17 +548,20 @@ Used for request-response operations requiring immediate feedback:
 ### 2. **Asynchronous (Kafka)**
 
 Used for event notifications and eventual consistency:
+
 - Payment Service → Kafka → Order Service (Event: PAYMENT_COMPLETED)
 - Order Service → Kafka → Waitroom Service (Event: CHECKOUT_COMPLETED)
 - Waitroom Service → Kafka → Analytics Service (Events: QUEUE_JOINED, QUEUE_READY)
 
 **Kafka Topics:**
+
 - `payment-events` - Payment lifecycle events
 - `order-events` - Order lifecycle events
 - `queue-events` - Waitroom events
 - `inventory-events` - Stock level changes
 
 **Benefits:**
+
 - Loose coupling between services
 - Event replay capability
 - Horizontal scaling of consumers
@@ -598,7 +580,6 @@ Used for event notifications and eventual consistency:
 **Inventory Service:**
 
 **Payment Service:**
-
 
 ### MongoDB Database
 
@@ -625,26 +606,27 @@ Used for event notifications and eventual consistency:
 
 ### Environment Setup
 
-*To be updated*
+_To be updated_
 
 ### Service Endpoints
 
-| Service | Port | Type | Endpoint |
-|---------|------|------|----------|
-| API Gateway | 3000 | HTTP | http://localhost:3000/api |
-| API Docs | 3000 | HTTP | http://localhost:3000/api/docs |
-| User Service | 50051 | gRPC | localhost:50051 |
-| Payment Service | 50052 | gRPC | localhost:50052 |
-| Event Service | 50053 | gRPC | localhost:50053 |
-| Inventory Service | 50054 | gRPC | localhost:50054 |
-| Order Service | 50055 | gRPC | localhost:50055 |
-| Waitroom Service | 50056 | gRPC | localhost:50056 |
+| Service           | Port  | Type | Endpoint                       |
+| ----------------- | ----- | ---- | ------------------------------ |
+| API Gateway       | 3000  | HTTP | http://localhost:3000/api      |
+| API Docs          | 3000  | HTTP | http://localhost:3000/api/docs |
+| User Service      | 50051 | gRPC | localhost:50051                |
+| Payment Service   | 50052 | gRPC | localhost:50052                |
+| Event Service     | 50053 | gRPC | localhost:50053                |
+| Inventory Service | 50054 | gRPC | localhost:50054                |
+| Order Service     | 50055 | gRPC | localhost:50055                |
+| Waitroom Service  | 50056 | gRPC | localhost:50056                |
 
 ---
 
 ## Design Patterns
 
 ### 1. **Saga Pattern** (Order Service)
+
 Manages distributed transactions across multiple microservices with compensation logic.
 
 **Problem:** Maintaining data consistency across multiple services without traditional ACID transactions.
@@ -652,6 +634,7 @@ Manages distributed transactions across multiple microservices with compensation
 **Solution:** The Order Service implements Saga Orchestration pattern - it acts as the orchestrator coordinating a sequence of local transactions across Event, Inventory, and Payment services.
 
 **Implementation:**
+
 - **Forward Flow:** Execute steps sequentially (validate event → check availability → reserve tickets → create order → create payment)
 - **Compensation Flow:** If any step fails, execute compensating transactions in reverse order (release tickets → delete order items → delete order)
 - **State Tracking:** Maintain saga state to know which steps completed successfully
@@ -659,12 +642,14 @@ Manages distributed transactions across multiple microservices with compensation
 - **Asynchronous Continuation:** Saga continues via Kafka events for payment completion/failure
 
 **Benefits:**
+
 - Maintains data consistency without distributed locks
 - Provides automatic rollback on failures
 - Supports long-running transactions
 - Resilient to partial failures
 
 ### 2. **Outbox Pattern** (Payment Service)
+
 Ensures atomic database updates and event publishing.
 
 **Problem:** Dual-write problem - updating database and publishing event can fail independently.
@@ -674,25 +659,30 @@ Ensures atomic database updates and event publishing.
 **Implementation:** Atomic transaction updates payment status and creates outbox entry together. Background worker (every 5 seconds) fetches unpublished events, publishes to Kafka, and marks as published.
 
 ### 3. **Repository Pattern** (All Services)
+
 Abstracts data access logic from business logic.
 
 ### 4. **Service Layer Pattern** (All Services)
+
 Encapsulates business logic separate from delivery mechanisms (gRPC, HTTP, Kafka).
 
 ### 5. **CQRS (Command Query Responsibility Segregation)** (Event Service)
+
 Separates read and write operations for scalability.
 
 ### 6. **Event Sourcing** (Partial - via Kafka)
+
 Events are the source of truth, stored in Kafka topics for replay.
 
 ### 7. **Circuit Breaker** (Future Enhancement)
+
 Prevents cascading failures in distributed system.
 
 ---
 
 ## Deployment
 
-*To be updated*
+_To be updated_
 
 ---
 
@@ -734,13 +724,14 @@ Prevents cascading failures in distributed system.
 
 ## Testing
 
-*To be updated*
+_To be updated_
 
 ---
 
 ## API Documentation
 
 Interactive API documentation available at:
+
 - **Development:** to be updated
 - **Staging:** to be updated
 
@@ -783,6 +774,7 @@ This project is licensed under the MIT License.
 ## Support
 
 For questions and support:
+
 - Email: vogiaan1904@gmail.com
 - Issues: GitHub Issues
 - Docs: [Documentation](to be updated)
@@ -790,4 +782,3 @@ For questions and support:
 ---
 
 **Built with passion**
-

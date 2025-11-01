@@ -7,6 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Go](https://img.shields.io/badge/Go-00ADD8?logo=go&logoColor=white)](https://golang.org/)
 [![NestJS](https://img.shields.io/badge/NestJS-E0234E?logo=nestjs&logoColor=white)](https://nestjs.com/)
+[![Temporal](https://img.shields.io/badge/Temporal-000000?logo=temporal&logoColor=white)](https://temporal.io/)
 [![gRPC](https://img.shields.io/badge/gRPC-4285F4?logo=google&logoColor=white)](https://grpc.io/)
 [![MongoDB](https://img.shields.io/badge/MongoDB-47A248?logo=mongodb&logoColor=white)](https://www.mongodb.com/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-336791?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
@@ -25,27 +26,22 @@
 - [Key Features](#key-features)
 - [Data Flow](#data-flow)
 - [Communication Patterns](#communication-patterns)
-- [Database Architecture](#database-architecture)
 - [Getting Started](#getting-started)
 - [Design Patterns](#design-patterns)
-- [Deployment](#deployment)
+- [Observability & Security](#observability--security)
 
 ---
 
 ## Overview
 
-TicketBottle V2 is a production-ready, distributed ticket selling platform built with microservices architecture. The system is designed to handle high-demand ticket sales scenarios (concerts, sports events, conferences) with features like:
+TicketBottle V2 is a production-ready, distributed ticket selling platform built with microservices architecture. The system is designed to handle high-demand ticket sales scenarios (concerts, sports events, conferences) with:
 
 - **Virtual Waiting Room** - Fair queue management for high-traffic ticket sales
-- **Real-time Inventory Management** - Atomic ticket reservation and confirmation
-- **Multi-provider Payment Processing** - Support for multiple payment gateways (ZaloPay, PayOS, VNPay)
-- **Event-Driven Architecture** - Reliable event processing with Kafka
-- **High Availability** - Distributed services with horizontal scaling capability
-
-The system uses a polyglot microservices approach, leveraging the strengths of different technologies:
-
-- **Go** for high-performance, concurrent services (Inventory, Order, Waitroom)
-- **TypeScript/NestJS** for feature-rich business logic services (API Gateway, User, Event, Payment)
+- **Real-time Inventory Management** - Atomic ticket reservation with pessimistic locking
+- **Multi-provider Payment Processing** - ZaloPay, PayOS, VNPay integration
+- **Temporal Workflows** - Reliable saga orchestration for distributed transactions
+- **Event-Driven Architecture** - Asynchronous event processing with Kafka
+- **Polyglot Microservices** - Go for performance-critical services, TypeScript/NestJS for business logic
 
 ---
 
@@ -58,257 +54,73 @@ The system uses a polyglot microservices approach, leveraging the strengths of d
 ## Services
 
 ### 1. **API Gateway** (TypeScript/NestJS)
-
 **Port:** 3000 | **Protocol:** HTTP/REST
 
-The unified entry point for all client requests.
-
-**Responsibilities:**
-
-- REST API exposure to web and mobile clients
-- JWT authentication and authorization
-- Request validation and transformation
-- Rate limiting and request throttling
-- gRPC client management and request forwarding
-- Swagger API documentation
-- CORS management
-
-**Key Dependencies:**
-
-- `@nestjs/microservices` - gRPC client
-- `@nestjs/jwt` - JWT authentication
-- `@nestjs/swagger` - API documentation
-- `express-rate-limit` - Rate limiting
-- `helmet` - Security headers
+Unified entry point providing REST APIs, JWT authentication, rate limiting, request validation, and gRPC client management. Includes Swagger documentation for all endpoints.
 
 ---
 
 ### 2. **User Service** (TypeScript/NestJS)
-
 **Port:** 50051 | **Protocol:** gRPC | **Database:** PostgreSQL
 
-Handles user management and authentication.
-
-**Responsibilities:**
-
-- User registration and profile management
-- User authentication (via API Gateway)
-- User data persistence
-- Email verification management
-
-**Database Schema:**
-
-- User table with fields: id, firstName, lastName, email, password (hashed), avatar, emailVerified, createdAt, updatedAt
-
-**gRPC Methods:**
-
-- `Create` - Register new user
-- `Update` - Update user profile
-- `FindOne` - Get user by ID or email
-- `FindAll` - Batch user lookup
-- `Delete` - Soft delete user
+Handles user registration, authentication, profile management, and email verification.
 
 ---
 
 ### 3. **Event Service** (TypeScript/NestJS)
-
 **Port:** 50053 | **Protocol:** gRPC | **Database:** PostgreSQL
 
-Manages events, organizers, and event configurations.
-
-**Responsibilities:**
-
-- Event creation and management
-- Event configuration (ticket sales, waitroom settings)
-- Event categorization and search
-- Event role management (admin, editor, viewer)
-- Event status workflow (draft → configured → approved → published)
-- Organizer management
-
-**Event Status Flow:**
-
-- DRAFT → CONFIGURED → APPROVED → PUBLISHED
-- Any status can transition to CANCELLED
+Manages events, organizers, and configurations. Implements event lifecycle (DRAFT → CONFIGURED → APPROVED → PUBLISHED) and role-based access control.
 
 ---
 
 ### 4. **Inventory Service** (Go/GORM)
-
 **Port:** 50054 | **Protocol:** gRPC | **Database:** PostgreSQL
 
-High-performance ticket inventory management with atomic operations.
-
-**Responsibilities:**
-
-- Ticket class creation and management
-- Real-time availability checking
-- Atomic ticket reservation (reserve/confirm/release)
-- Ticket inventory tracking (total, reserved, sold)
-- Expiration handling for stale reservations
-
-**Availability Formula:**
-
-- available = total - reserved - sold
+High-performance ticket inventory management using pessimistic locking for atomic operations. Implements three-step reservation flow: `Reserve → Confirm/Release` with automatic cleanup of expired reservations.
 
 **Key Operations:**
-
-- `Reserve` - Atomically reserve tickets for an order (15-minute hold)
-- `Confirm` - Convert reservation to sale (payment completed)
-- `Release` - Free reserved tickets (payment failed/expired)
-
-**Background Job:**
-
-- Periodic cleanup of expired reservations (every 1 minute)
+- `Reserve` - Lock tickets with 15-minute hold
+- `Confirm` - Convert reservation to sale
+- `Release` - Free reserved tickets
 
 ---
 
-### 5. **Order Service** (Go/MongoDB)
-
+### 5. **Order Service** (Go/MongoDB/Temporal)
 **Port:** 50055 | **Protocol:** gRPC | **Database:** MongoDB
 
-**Saga Orchestrator** - Coordinates distributed transactions across multiple services.
+**Saga Orchestrator** using **Temporal workflows** to coordinate distributed transactions across Event, Inventory, and Payment services.
 
-**Responsibilities:**
+**Temporal Workflows:**
+- `CreateOrder` - Multi-step saga with automatic compensation
+- `ConfirmOrder` - Asynchronous order confirmation from payment events
 
-- Order creation with multi-step coordination
-- Saga orchestration for distributed transactions
-- Compensation/rollback on transaction failures
-- Order status management
-- Payment coordination
-- Inventory reservation coordination
-- Order history and queries
+**Saga Flow:**
+1. Check availability → Reserve tickets → Create order → Create payment intent
+2. On payment success: Confirm inventory → Update order status → Publish events
+3. On failure: Automatic compensation (release tickets, delete order)
 
-**Saga Pattern Implementation:**
-
-The Order Service implements the **Saga Orchestration Pattern** to manage distributed transactions across Event, Inventory, and Payment services. Each order creation is a saga with multiple steps:
-
-**Saga Steps (Forward Flow):**
-
-1. **Validate Event** - Verify event exists and is published (Event Service gRPC)
-2. **Validate Event Config** - Check event configuration (Event Service gRPC)
-3. **Validate Checkout Token** - If waitroom enabled, verify JWT token
-4. **Get Ticket Classes** - Fetch ticket information (Inventory Service gRPC)
-5. **Check Availability** - Verify sufficient ticket inventory (Inventory Service gRPC)
-6. **Reserve Tickets** - Atomically reserve tickets with 15-min hold (Inventory Service gRPC) ✓ _Saga tracking begins_
-7. **Create Order** - Persist order record (MongoDB) ✓ _Saga tracked_
-8. **Create Order Items** - Persist order line items (MongoDB) ✓ _Saga tracked_
-9. **Create Payment Intent** - Generate payment URL (Payment Service gRPC)
-10. **Return Payment URL** - Complete order creation
-
-**Compensation/Rollback (Reverse Flow):**
-If any step fails after saga tracking begins, the service automatically compensates:
-
-- **Release Tickets** - Cancel inventory reservation (Inventory Service gRPC)
-- **Delete Order Items** - Remove order line items (MongoDB)
-- **Delete Order** - Remove order record (MongoDB)
-
-**Asynchronous Saga Continuation (via Kafka):**
-
-- **Payment Completed Event** → Confirm inventory reservation → Update order status to COMPLETED → Publish CHECKOUT_COMPLETED
-- **Payment Failed Event** → Release inventory reservation → Update order status to FAILED → Publish CHECKOUT_FAILED
-- **Payment Expired Event** → Release inventory reservation → Update order status to CANCELLED
-
-**Saga State Tracking:**
-The service maintains a `SagaCompensation` structure to track completed steps:
-
-- `CreatedOrder` - Order record created
-- `ItemsCreated` - Order items created
-- `TicketsReserved` - Inventory reservation made
-
-This ensures accurate rollback in case of failures at any point in the transaction.
+**Compensation Tracking:** Temporal workflow state ensures accurate rollback at any failure point.
 
 ---
 
 ### 6. **Payment Service** (TypeScript/NestJS)
-
 **Port:** 50052 | **Protocol:** gRPC | **Database:** PostgreSQL
 
-Multi-provider payment processing with outbox pattern for reliability.
-
-**Responsibilities:**
-
-- Payment intent creation
-- Payment confirmation and cancellation
-- Multi-provider support (ZaloPay, PayOS, VNPay)
-- Payment status tracking
-- Webhook handling
-- Event publishing via Outbox pattern
-
-**Outbox Pattern:**
-Ensures exactly-once event delivery by atomically saving payment updates and events in the same database transaction. Payment updates and outbox entries are saved in a single atomic transaction, then a background worker publishes events from the outbox to Kafka.
-
-**Payment Flow:**
-
-1. Create payment intent → Get payment URL
-2. User completes payment on provider site
-3. Provider sends webhook → Update payment status
-4. Save event to outbox (atomic with payment update)
-5. Background worker publishes event to Kafka
-6. Order service consumes event → Confirms order
+Multi-provider payment processing (ZaloPay, PayOS, VNPay) with **Outbox Pattern** for reliable event delivery. Atomically saves payment updates and events in the same transaction, with background workers publishing to Kafka.
 
 ---
 
 ### 7. **Waitroom Service** (Go/Redis/Kafka)
-
 **Port:** 50056 | **Protocol:** gRPC | **Database:** Redis
 
-Virtual queue management for high-traffic ticket sales.
+Virtual queue management using Redis sorted sets for FIFO ordering. Background processor admits users when checkout slots are available (max 100 concurrent, configurable).
 
-**Responsibilities:**
-
-- Queue session management
-- Fair queue processing (FIFO)
-- Checkout token generation (JWT)
+**Key Features:**
+- JWT-based checkout tokens with 15-minute expiration
 - Real-time position updates
-- Automatic queue admission when slots available
-- Session expiration handling
-
-**Redis Data Structures:**
-
-**Sessions (Hash):**
-
-- Key: `waitroom:session:{session_id}`
-- Value: JSON with id, user_id, event_id, status (queued → admitted → completed), position, checkout_token (JWT), queued_at, expires_at, admitted_at, checkout_expires_at
-
-**Queue (Sorted Set):**
-
-- Key: `waitroom:{event_id}:queue`
-- Score: Unix timestamp (FIFO ordering)
-- Members: session_ids
-
-**Processing Set (Set):**
-
-- Key: `waitroom:{event_id}:processing`
-- Members: session_ids of users currently in checkout
-- Max 100 concurrent (configurable)
-
-**Queue Processor:**
-Background job running every 1 second:
-
-1. Check processing count (how many users in checkout)
-2. Calculate available slots (max 100 - current processing)
-3. Pop users from front of queue
-4. Generate JWT checkout token for each user
-5. Update session status to "admitted"
-6. Add to processing set (15-minute TTL)
-7. Publish QUEUE_READY event to Kafka
-
-**Session States:**
-
-- QUEUED → ADMITTED → COMPLETED
-- QUEUED → EXPIRED
-
-**Kafka Events:**
-
-- `queue.joined` - User joins queue
-- `queue.left` - User leaves queue
-- `queue.ready` - User admitted to checkout (consumed by Order service)
-
-**Kafka Event Consumers:**
-
-- `checkout.completed` - Remove from processing, free slot
-- `checkout.failed` - Remove from processing, free slot
-- `checkout.expired` - Remove from processing, free slot
+- Automatic session cleanup
+- Kafka event publishing for queue lifecycle
 
 ---
 
@@ -316,98 +128,47 @@ Background job running every 1 second:
 
 ### Languages & Frameworks
 
-| Service           | Language   | Framework | Key Libraries                          |
-| ----------------- | ---------- | --------- | -------------------------------------- |
-| API Gateway       | TypeScript | NestJS    | `@nestjs/microservices`, `@nestjs/jwt` |
-| User Service      | TypeScript | NestJS    | Prisma, bcryptjs                       |
-| Event Service     | TypeScript | NestJS    | Prisma, `@nestjs/cqrs`                 |
-| Payment Service   | TypeScript | NestJS    | Prisma, KafkaJS, `@nestjs/schedule`    |
-| Inventory Service | Go 1.25    | -         | GORM, gRPC                             |
-| Order Service     | Go 1.25    | -         | MongoDB Driver, Sarama (Kafka)         |
-| Waitroom Service  | Go 1.25    | -         | Redis, Sarama (Kafka), JWT             |
+| Service           | Language   | Framework | Key Libraries                               |
+| ----------------- | ---------- | --------- | ------------------------------------------- |
+| API Gateway       | TypeScript | NestJS    | `@nestjs/microservices`, `@nestjs/jwt`      |
+| User Service      | TypeScript | NestJS    | Prisma, bcryptjs                            |
+| Event Service     | TypeScript | NestJS    | Prisma, `@nestjs/cqrs`                      |
+| Payment Service   | TypeScript | NestJS    | Prisma, KafkaJS, `@nestjs/schedule`         |
+| Inventory Service | Go 1.25    | -         | GORM, gRPC                                  |
+| Order Service     | Go 1.25    | -         | Temporal, MongoDB Driver, Sarama (Kafka)    |
+| Waitroom Service  | Go 1.25    | -         | Redis, Sarama (Kafka), JWT                  |
 
-### Databases & Storage
+### Infrastructure & Communication
 
+- **Temporal** - Workflow orchestration and saga management
+- **gRPC** - Inter-service synchronous communication
+- **Kafka** - Event streaming and asynchronous messaging
 - **PostgreSQL** - User, Event, Inventory, Payment data
 - **MongoDB** - Order data (document-based for flexibility)
 - **Redis** - Waitroom sessions, queue management, caching
-
-### Communication
-
-- **gRPC** - Inter-service synchronous communication
-- **Kafka** - Event streaming and asynchronous messaging
-- **Protocol Buffers** - Service contract definitions
-
-### Development & Tools
-
 - **Docker** - Containerization
-- **Prisma** - TypeScript ORM and migrations
-- **GORM** - Go ORM
-- **Winston** - Logging (TypeScript services)
-- **Zap** - Logging (Go services)
-- **Swagger** - API documentation
 
 ---
 
 ## ✨ Key Features
 
-### 1. **Virtual Waiting Room**
+### **Virtual Waiting Room**
+Fair FIFO queue management using Redis sorted sets, automatic admission when slots available, JWT-based checkout tokens.
 
-- Fair FIFO queue management for high-traffic sales
-- Automatic admission when checkout slots available
-- Real-time position updates
-- JWT-based checkout tokens with expiration
-- Configurable max concurrent users (default: 100)
-- Session TTL and automatic cleanup
+### **Atomic Inventory Management**
+Pessimistic locking with three-step flow (Reserve → Confirm/Release), automatic cleanup of expired reservations.
 
-### 2. **Atomic Inventory Management**
+### **Temporal Workflow Orchestration**
+Saga pattern implementation using Temporal for distributed transactions, automatic compensation on failures, durable execution state.
 
-- Pessimistic locking for ticket reservations
-- Three-step reservation flow: Reserve → Confirm/Release
-- Automatic cleanup of expired reservations
-- Real-time availability checking
-- Support for multiple ticket classes per event
+### **Outbox Pattern for Events**
+Exactly-once event delivery by atomically saving business data and events in the same transaction.
 
-### 3. **Multi-Provider Payment Processing**
+### **Multi-Provider Payments**
+ZaloPay, PayOS, VNPay integration with webhook handling and idempotent operations.
 
-- Support for ZaloPay, PayOS, VNPay
-- Webhook handling for payment confirmation
-- Outbox pattern for reliable event delivery
-- Automatic retry on event publishing failures
-- Idempotent payment operations
-
-### 4. **Distributed Transaction Management (Saga Pattern)**
-
-- Saga orchestration for multi-service transactions
-- Automatic compensation/rollback on failures
-- State tracking for transaction progress
-- Idempotent operations for safe retries
-- Mixed synchronous (gRPC) and asynchronous (Kafka) coordination
-
-### 5. **Event-Driven Architecture**
-
-- Asynchronous event processing with Kafka
-- Reliable event delivery with Outbox pattern
-- Event replay capability
-- Loose coupling between services
-- Horizontal scalability
-
-### 6. **High Availability**
-
-- Stateless service design
-- Database connection pooling
-- Graceful shutdown handling
-- Health check endpoints
-- Circuit breaker patterns (future)
-
-### 7. **Security**
-
-- JWT-based authentication
-- Role-based access control (Event roles)
-- Rate limiting on API Gateway
-- CORS configuration
-- Helmet security headers
-- Password hashing with bcrypt
+### **Event-Driven Architecture**
+Asynchronous event processing with Kafka for loose coupling and horizontal scalability.
 
 ---
 
@@ -415,179 +176,63 @@ Background job running every 1 second:
 
 ### Complete Ticket Purchase Flow
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│ 1. USER JOINS WAITROOM                                          │
-├─────────────────────────────────────────────────────────────────┤
-│ User → API Gateway → Waitroom Service                           │
-│   ├─ Create session in Redis                                    │
-│   ├─ Add to queue (sorted set)                                  │
-│   ├─ Publish QUEUE_JOINED event                                 │
-│   └─ Return position in queue                                   │
-└─────────────────────────────────────────────────────────────────┘
-                            ↓
-┌─────────────────────────────────────────────────────────────────┐
-│ 2. QUEUE PROCESSOR (Background Job - Every 1s)                  │
-├─────────────────────────────────────────────────────────────────┤
-│ Waitroom Service                                                │
-│   ├─ Check available checkout slots (100 - processing count)    │
-│   ├─ Pop users from queue (batch of 10)                         │
-│   ├─ Generate JWT checkout token (15-min expiry)                │
-│   ├─ Update session status → "admitted"                         │
-│   ├─ Add to processing set                                      │
-│   └─ Publish QUEUE_READY event → Kafka                          │
-└─────────────────────────────────────────────────────────────────┘
-                            ↓
-┌─────────────────────────────────────────────────────────────────┐
-│ 3. USER POLLS STATUS & GETS CHECKOUT ACCESS                     │
-├─────────────────────────────────────────────────────────────────┤
-│ User → API Gateway → Waitroom Service                           │
-│   └─ Return: status="admitted", checkout_token, checkout_url    │
-│                                                                 │
-│ User → Navigate to checkout page with token                     │
-└─────────────────────────────────────────────────────────────────┘
-                            ↓
-┌─────────────────────────────────────────────────────────────────┐
-│ 4. CREATE ORDER                                                 │
-├─────────────────────────────────────────────────────────────────┤
-│ User → API Gateway → Order Service                              │
-│   ├─ Validate event (Event Service gRPC)                        │
-│   ├─ Get ticket prices (Inventory Service gRPC)                 │
-│   ├─ Check availability (Inventory Service gRPC)                │
-│   │   └─ Response: available=true/false                         │
-│   ├─ Reserve tickets (Inventory Service gRPC)                   │
-│   │   └─ Atomic: increment reserved count                       │
-│   ├─ Create order record (MongoDB)                              │
-│   │   └─ Status: PENDING                                        │
-│   └─ Create payment intent (Payment Service gRPC)               │
-│       └─ Return payment URL                                     │
-│                                                                 │
-│ Response → User receives payment redirect URL                   │
-└─────────────────────────────────────────────────────────────────┘
-                            ↓
-┌─────────────────────────────────────────────────────────────────┐
-│ 5. PAYMENT PROCESSING                                           │
-├─────────────────────────────────────────────────────────────────┤
-│ User → Payment Provider (ZaloPay/PayOS/VNPay)                   │
-│   └─ Complete payment on provider site                          │
-│                                                                 │
-│ Payment Provider → Webhook → Payment Service                    │
-│   ├─ Atomic Transaction:                                        │
-│   │   ├─ Update payment status → COMPLETED                      │
-│   │   └─ Save event to Outbox table                             │
-│   └─ Return 200 OK to provider                                  │
-│                                                                 │
-│ Background Worker (Every 5s):                                   │
-│   ├─ Fetch unpublished events from Outbox                       │
-│   ├─ Publish PAYMENT_COMPLETED event → Kafka                    │
-│   └─ Mark event as published                                    │
-└─────────────────────────────────────────────────────────────────┘
-                            ↓
-┌─────────────────────────────────────────────────────────────────┐
-│ 6. ORDER COMPLETION (Kafka Consumer)                            │
-├─────────────────────────────────────────────────────────────────┤
-│ Order Service consumes PAYMENT_COMPLETED event                  │
-│   ├─ Confirm inventory reservation (Inventory Service gRPC)     │
-│   │   └─ Atomic: decrement reserved, increment sold             │
-│   ├─ Update order status → COMPLETED                            │
-│   └─ Publish ORDER_COMPLETED event → Kafka                      │
-└─────────────────────────────────────────────────────────────────┘
-                            ↓
-┌─────────────────────────────────────────────────────────────────┐
-│ 7. WAITROOM CLEANUP (Kafka Consumer)                            │
-├─────────────────────────────────────────────────────────────────┤
-│ Waitroom Service consumes CHECKOUT_COMPLETED event              │
-│   ├─ Remove session from processing set                         │
-│   ├─ Update session status → completed                          │
-│   └─ Free checkout slot for next user in queue                  │
-└─────────────────────────────────────────────────────────────────┘
-```
+**1. Join Waitroom**
+User → Waitroom Service → Create Redis session → Add to queue (sorted set) → Return position
 
-### Error Scenarios
+**2. Queue Processing (Background - 1s interval)**
+Waitroom Service → Check available slots → Pop users from queue → Generate JWT tokens → Update to "admitted" → Publish `QUEUE_READY` event
 
-**Payment Failure:**
+**3. Checkout Admitted**
+User polls status → Receives checkout token → Navigates to checkout page
 
-- Payment Failed → PAYMENT_FAILED event
-- Order Service: Release inventory reservation
-- Order Service: Update order status → FAILED
-- Waitroom Service: Free checkout slot
+**4. Create Order (Temporal Workflow)**
+API Gateway → Order Service → Temporal `CreateOrder` workflow:
+- Check availability (Inventory Service)
+- Reserve tickets atomically (Inventory Service)
+- Create order record (MongoDB)
+- Create payment intent (Payment Service)
+- Return payment URL to user
 
-**Payment Timeout (15 minutes):**
+**5. Payment Processing**
+User → Payment Provider → Complete payment → Webhook → Payment Service:
+- Atomic transaction: Update payment + Save to Outbox
+- Background worker: Publish `PAYMENT_COMPLETED` to Kafka
 
-- Payment Expired → PAYMENT_EXPIRED event
-- Order Service: Release inventory reservation
-- Order Service: Update order status → CANCELLED
-- Waitroom Service: Free checkout slot
+**6. Order Confirmation (Kafka Consumer)**
+Order Service consumes `PAYMENT_COMPLETED` → Temporal `ConfirmOrder` workflow:
+- Confirm inventory (decrement reserved, increment sold)
+- Update order status → COMPLETED
+- Publish `CHECKOUT_COMPLETED` event
 
-**Insufficient Inventory:**
+**7. Waitroom Cleanup**
+Waitroom Service consumes `CHECKOUT_COMPLETED` → Free checkout slot → Admit next user
 
-- Order Creation → Check availability → Insufficient stock
-- Return error to user (before reservation)
+### Error Handling
+
+**Payment Failure/Timeout:** Temporal workflow compensation → Release inventory → Update order status → Free checkout slot
+
+**Insufficient Inventory:** Fail fast before reservation → Return error to user
 
 ---
 
 ## Communication Patterns
 
-### 1. **Synchronous (gRPC)**
+### **Synchronous (gRPC)**
+Used for request-response operations requiring immediate feedback. Protocol Buffers provide type safety and better performance than REST.
 
-Used for request-response operations requiring immediate feedback:
+**Examples:** Order → Inventory (reserve tickets), Order → Payment (create intent), API Gateway → User/Event services
 
-- API Gateway → User Service (Get user details)
-- API Gateway → Event Service (Get event info)
-- Order Service → Inventory (Reserve tickets)
-- Order Service → Payment (Create payment intent)
-- Waitroom → Event Service (Get active events)
+### **Asynchronous (Kafka)**
+Used for event notifications and eventual consistency. Enables loose coupling and horizontal scalability.
 
-**Benefits:**
+**Topics:** `payment-events`, `order-events`, `queue-events`, `inventory-events`
 
-- Type safety with Protocol Buffers
-- Bi-directional streaming support
-- Better performance than REST
-- Built-in load balancing
+**Examples:** Payment → Order (payment completed), Order → Waitroom (checkout completed)
 
-### 2. **Asynchronous (Kafka)**
+### **Temporal Workflows**
+Used for long-running, stateful processes requiring automatic compensation and retry logic.
 
-Used for event notifications and eventual consistency:
-
-- Payment Service → Kafka → Order Service (Event: PAYMENT_COMPLETED)
-- Order Service → Kafka → Waitroom Service (Event: CHECKOUT_COMPLETED)
-- Waitroom Service → Kafka → Analytics Service (Events: QUEUE_JOINED, QUEUE_READY)
-
-**Kafka Topics:**
-
-- `payment-events` - Payment lifecycle events
-- `order-events` - Order lifecycle events
-- `queue-events` - Waitroom events
-- `inventory-events` - Stock level changes
-
-**Benefits:**
-
-- Loose coupling between services
-- Event replay capability
-- Horizontal scaling of consumers
-- Fault tolerance
-
----
-
-## Database Architecture
-
-### PostgreSQL Databases
-
-**User Service:**
-
-**Event Service:**
-
-**Inventory Service:**
-
-**Payment Service:**
-
-### MongoDB Database
-
-**Order Service:**
-
-### Redis Data Structures
-
-**Waitroom Service:**
+**Examples:** `CreateOrder` workflow, `ConfirmOrder` workflow
 
 ---
 
@@ -603,6 +248,7 @@ Used for event notifications and eventual consistency:
 - **MongoDB** >= 5.0
 - **Redis** >= 7.0
 - **Kafka** >= 3.0
+- **Temporal** >= 1.24
 
 ### Environment Setup
 
@@ -625,58 +271,19 @@ _To be updated_
 
 ## Design Patterns
 
-### 1. **Saga Pattern** (Order Service)
+### **Saga Pattern with Temporal** (Order Service)
+Manages distributed transactions across multiple services with automatic compensation. Temporal provides durable execution state, automatic retries, and compensation orchestration.
 
-Manages distributed transactions across multiple microservices with compensation logic.
+**Implementation:** `CreateOrder` and `ConfirmOrder` workflows coordinate Event, Inventory, and Payment services. On failure, Temporal automatically executes compensating activities (release tickets → delete order items → delete order).
 
-**Problem:** Maintaining data consistency across multiple services without traditional ACID transactions.
+### **Outbox Pattern** (Payment Service)
+Ensures exactly-once event delivery by atomically saving business data and events in the same database transaction. Background workers publish events from the outbox to Kafka.
 
-**Solution:** The Order Service implements Saga Orchestration pattern - it acts as the orchestrator coordinating a sequence of local transactions across Event, Inventory, and Payment services.
+### **Repository Pattern** (All Services)
+Abstracts data access logic from business logic for testability and flexibility.
 
-**Implementation:**
-
-- **Forward Flow:** Execute steps sequentially (validate event → check availability → reserve tickets → create order → create payment)
-- **Compensation Flow:** If any step fails, execute compensating transactions in reverse order (release tickets → delete order items → delete order)
-- **State Tracking:** Maintain saga state to know which steps completed successfully
-- **Idempotency:** Each step is designed to be idempotent to handle retries safely
-- **Asynchronous Continuation:** Saga continues via Kafka events for payment completion/failure
-
-**Benefits:**
-
-- Maintains data consistency without distributed locks
-- Provides automatic rollback on failures
-- Supports long-running transactions
-- Resilient to partial failures
-
-### 2. **Outbox Pattern** (Payment Service)
-
-Ensures atomic database updates and event publishing.
-
-**Problem:** Dual-write problem - updating database and publishing event can fail independently.
-
-**Solution:** Save events to an outbox table in the same transaction as the business logic. Background worker publishes events from outbox.
-
-**Implementation:** Atomic transaction updates payment status and creates outbox entry together. Background worker (every 5 seconds) fetches unpublished events, publishes to Kafka, and marks as published.
-
-### 3. **Repository Pattern** (All Services)
-
-Abstracts data access logic from business logic.
-
-### 4. **Service Layer Pattern** (All Services)
-
-Encapsulates business logic separate from delivery mechanisms (gRPC, HTTP, Kafka).
-
-### 5. **CQRS (Command Query Responsibility Segregation)** (Event Service)
-
-Separates read and write operations for scalability.
-
-### 6. **Event Sourcing** (Partial - via Kafka)
-
-Events are the source of truth, stored in Kafka topics for replay.
-
-### 7. **Circuit Breaker** (Future Enhancement)
-
-Prevents cascading failures in distributed system.
+### **CQRS** (Event Service)
+Separates read and write operations for independent scaling and optimization.
 
 ---
 
@@ -686,99 +293,25 @@ _To be updated_
 
 ---
 
-## Monitoring & Observability
+## Observability & Security
 
 ### Logging
+- **TypeScript Services:** Winston with structured logging
+- **Go Services:** Uber Zap for high-performance logging
+- **Temporal:** Built-in workflow execution history and observability
 
-**TypeScript Services:** Winston with daily rotate file for structured logging
-
-**Go Services:** Uber Zap for high-performance structured logging
-
-### Metrics (Future)
-
-- Service health checks
-- Request latency
-- Queue lengths
-- Event processing lag
-- Database connection pool usage
-
-### Tracing (Future)
-
-- Distributed tracing with OpenTelemetry
-- Request correlation IDs
+### Security
+- JWT authentication with role-based access control
+- Rate limiting on API Gateway
+- Input validation, parameterized queries, password hashing (bcrypt)
+- CORS and security headers (Helmet)
 
 ---
 
-## Security
+## License & Contact
 
-1. **Authentication:** JWT tokens with expiration
-2. **Authorization:** Role-based access control (Event roles)
-3. **Rate Limiting:** Express rate limiter on API Gateway
-4. **Input Validation:** Class-validator on all inputs
-5. **SQL Injection Prevention:** Parameterized queries (Prisma, GORM)
-6. **Password Hashing:** bcrypt with salt
-7. **CORS:** Configured origins
-8. **Headers:** Helmet security headers
+**License:** MIT
 
----
+**Author:** Vo Gia An (vogiaan1904@gmail.com)
 
-## Testing
-
-_To be updated_
-
----
-
-## API Documentation
-
-Interactive API documentation available at:
-
-- **Development:** to be updated
-- **Staging:** to be updated
-
-Powered by Swagger/OpenAPI 3.0
-
----
-
-## Contributing
-
-1. Fork the repository
-2. Create feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open Pull Request
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License.
-
----
-
-## Authors
-
-**Vo Gia An**
-
----
-
-## Acknowledgments
-
-- NestJS framework
-- Go community
-- Kafka ecosystem
-- Prisma ORM
-- All open-source contributors
-
----
-
-## Support
-
-For questions and support:
-
-- Email: vogiaan1904@gmail.com
-- Issues: GitHub Issues
-- Docs: [Documentation](to be updated)
-
----
-
-**Built with passion**
+**Built with:** NestJS, Go, Temporal, Kafka, gRPC, Prisma, and the open-source community

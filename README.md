@@ -254,19 +254,6 @@ Used for long-running, stateful processes requiring automatic compensation and r
 
 _To be updated_
 
-### Service Endpoints
-
-| Service           | Port  | Type | Endpoint                       |
-| ----------------- | ----- | ---- | ------------------------------ |
-| API Gateway       | 3000  | HTTP | http://localhost:3000/api      |
-| API Docs          | 3000  | HTTP | http://localhost:3000/api/docs |
-| User Service      | 50051 | gRPC | localhost:50051                |
-| Payment Service   | 50052 | gRPC | localhost:50052                |
-| Event Service     | 50053 | gRPC | localhost:50053                |
-| Inventory Service | 50054 | gRPC | localhost:50054                |
-| Order Service     | 50055 | gRPC | localhost:50055                |
-| Waitroom Service  | 50056 | gRPC | localhost:50056                |
-
 ---
 
 ## Design Patterns

@@ -106,19 +106,101 @@ TicketBottle is a high-performance ticket selling platform built on microservice
 
 | Function | Trigger | Purpose | Concurrency |
 |----------|---------|---------|-------------|
-| **payment-webhook** | API Gateway (POST) | ZaloPay/PayOS callbacks | 100 |
-| **email-sender** | EventBridge | Order confirmation, tickets | 50 |
-| **pdf-generator** | EventBridge | Generate ticket PDFs | 20 |
-| **cleanup-expired** | EventBridge (5 min) | Clean expired reservations | 1 |
-| **analytics-etl** | EventBridge (daily) | Sales reports to S3 | 1 |
+| **payment-webhook-handler** | API Gateway (POST) | ZaloPay/PayOS callbacks | 100 |
+| **outbox-processor** | EventBridge (1 min) | Poll outbox, publish to Kafka | 1 |
+| **outbox-cleanup** | EventBridge (daily 2AM) | Cleanup old events, monitoring | 1 |
+| **email-sender** | SQS (from Kafka) | Order confirmation, tickets | 50 |
+| **pdf-generator** | SQS (from Kafka) | Generate ticket PDFs with QR | 20 |
+
+### Lambda Architecture
+
+```
++-------------------+     +------------------+
+| Payment Providers |     |   API Gateway    |
+| (ZaloPay, PayOS)  |---->| POST /webhook/*  |
++-------------------+     +--------+---------+
+                                   |
+                                   v
+                          +--------+---------+
+                          | payment-webhook- |
+                          | handler          |
+                          +--------+---------+
+                                   |
+                                   v
+                          +--------+---------+
+                          |  Aurora Outbox   |
+                          |  (Payment DB)    |
+                          +--------+---------+
+                                   |
+              +--------------------+--------------------+
+              |                                         |
++-------------v-------------+              +------------v-----------+
+| EventBridge (1 min)       |              | EventBridge (daily)    |
++-------------+-------------+              +------------+-----------+
+              |                                         |
+              v                                         v
++-------------+-------------+              +------------+-----------+
+| outbox-processor          |              | outbox-cleanup         |
+| - Poll unpublished events |              | - Delete old events    |
+| - Publish to Kafka        |              | - Monitor failures     |
+| - Mark as published       |              | - CloudWatch metrics   |
++-------------+-------------+              +------------------------+
+              |
+              v
++-------------+-------------+
+|    Kafka / MSK            |
+| payment.completed         |
+| payment.failed            |
++-------------+-------------+
+              |
++-------------+-------------+
+| EventBridge Pipes         |
+| (Kafka -> SQS)            |
++-------------+-------------+
+              |
+     +--------+--------+
+     |                 |
+     v                 v
++----+----+      +-----+-----+
+| email-  |      | pdf-      |
+| sender  |      | generator |
++---------+      +-----------+
+     |                 |
+     v                 v
++----+----+      +-----+-----+
+|   SES   |      |    S3     |
++---------+      +-----------+
+```
 
 ### Lambda Configuration
 
+| Function | Runtime | Memory | Timeout | VPC |
+|----------|---------|--------|---------|-----|
+| payment-webhook-handler | Node.js 20 | 256 MB | 30s | Yes (Aurora) |
+| outbox-processor | Node.js 20 | 256 MB | 60s | Yes (Aurora, MSK) |
+| outbox-cleanup | Node.js 20 | 256 MB | 120s | Yes (Aurora) |
+| email-sender | Node.js 20 | 256 MB | 30s | No |
+| pdf-generator | Node.js 20 | 512 MB | 300s | No |
+
+### Code Location
+
+All Lambda functions are implemented in TypeScript:
+
 ```
-Runtime: Node.js 20.x / Python 3.12
-Memory: 256-512 MB
-Timeout: 30s (webhooks), 5min (PDF)
-VPC: Private subnets (for Aurora access)
+aws/lambda/
++-- payment-webhook-handler/
+|   +-- index.ts          # Webhook verification and handling
++-- outbox-processor/
+|   +-- index.ts          # Outbox polling and Kafka publishing
++-- outbox-cleanup/
+|   +-- index.ts          # Cleanup and monitoring
++-- email-sender/
+|   +-- index.ts          # SES email delivery
++-- pdf-generator/
+|   +-- index.ts          # PDFKit + QR code generation
++-- package.json          # Shared dependencies
++-- tsconfig.json         # TypeScript config
++-- README.md             # Documentation
 ```
 
 ---

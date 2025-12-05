@@ -47,7 +47,7 @@ TicketBottle V2 is a production-ready, distributed ticket selling platform built
 
 ## System Architecture
 
-![system architecture](/images/architecture.png)
+![system architecture](/images/service_communication.png)
 
 ---
 

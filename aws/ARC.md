@@ -32,7 +32,7 @@ TicketBottle is a high-performance ticket selling platform built on microservice
     |    |     AMAZON EKS      |    |
     |    |                     |    |
     |    |  +---------------+  |    |
-    |    |  | API Gateway   |  |    |
+    |    |  | APP Gateway   |  |    |
     |    |  | (NestJS:3000) |  |    |
     |    |  +-------+-------+  |    |
     |    |          |          |    |
@@ -80,7 +80,7 @@ TicketBottle is a high-performance ticket selling platform built on microservice
 
 | Service | Language | Port | Protocol | Database | Description |
 |---------|----------|------|----------|----------|-------------|
-| **API Gateway** | NestJS | 3000 | HTTP/REST | - | Entry point, auth, rate limiting |
+| **APP Gateway** | NestJS | 3000 | HTTP/REST | - | Entry point, auth, rate limiting, aggregation |
 | **User Service** | NestJS | 50051 | gRPC | Aurora | User management, authentication |
 | **Event Service** | NestJS | 50053 | gRPC | Aurora | Event lifecycle, CQRS |
 | **Inventory Service** | Go | 50054 | gRPC | Aurora | Ticket inventory, pessimistic locking |
@@ -254,7 +254,7 @@ aws/lambda/
 ### Data Flow
 
 ```
-User --> API GW --> Waitroom --> Redis (ZSET)
+User --> API GW --> APP GW --> Waitroom --> Redis (ZSET)
                         |
                         v
                    Inventory
